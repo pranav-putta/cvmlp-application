@@ -2,3 +2,10 @@
 **/runs/*
 .idea/
 **/outputs/*
+**/*.pt
+**/*.mp4
+__pycache__/
+.DS_Store
+**/*.pkl
+*.mp4
+*.pyc

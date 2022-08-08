@@ -8,12 +8,19 @@ import habitat
 import numpy as np
 import torch
 import torch.nn.functional as F
+from habitat_sim.logging import logger
 from torch import nn, optim
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
+import dynamic_obstacle_task
+import static_obstacle_task
 from argparser import argclass, parse_args
 
+static_obstacle_task
+dynamic_obstacle_task
+
+logger.setLevel('ERROR')
 writer = SummaryWriter()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -31,12 +38,13 @@ def reset(env):
 
 @argclass
 class PointNavArguments:
-    state_size: int = field(default=8)
+    state_size: int = field(default=12)
     hidden_size: int = field(default=128)
-    history_size: int = field(default=6)
+    history_size: int = field(default=12)
     num_episodes: int = field(default=10000)
     max_t: int = field(default=100)
     gamma: float = field(default=1.0)
+    config: str = field(default="pointnav.yaml")
 
 
 Transition = namedtuple('Transition',
@@ -135,7 +143,7 @@ def reinforce(args: PointNavArguments, policy, optimizer, env: habitat.Env, n_ep
                 else:
                     diff = diff * 3
                 rewards.append(diff - stationary_punishment)  # * torch.log(torch.tensor(max_t - t)))
-                #rewards.append((diff - 0.1 * e / n_episodes) * max(10 - dist, 1) + exploration)
+                # rewards.append((diff - 0.1 * e / n_episodes) * max(10 - dist, 1) + exploration)
                 last_dist = dist
                 diff_history.append(diff)
             dists.append(dist)
@@ -170,8 +178,8 @@ def reinforce(args: PointNavArguments, policy, optimizer, env: habitat.Env, n_ep
         if e % print_every == 0:
             print('Episode {}\tAverage Reward: {:.2f}, Average Success: {:.2f}, Average SPL: {:.2f}'.format(e, np.mean(
                 scores_deque), np.mean(success_scores), np.mean(spl_scores)))
-            print(dists)
-            print(moves)
+            # print(dists)
+            # print(moves)
 
     return scores
 
@@ -213,8 +221,8 @@ def update_state(args: PointNavArguments, state: list, dist, heading, action):
 
 
 def main():
-    env = habitat.Env(config=habitat.get_config("pointnav.yaml"))
-    args: PointNavArguments = parse_args(PointNavArguments)
+    args: PointNavArguments = parse_args(PointNavArguments, resolve_config=False)
+    env = habitat.Env(config=habitat.get_config(args.config))
 
     policy_model = Policy(state_size=args.state_size, hidden_size=args.hidden_size, action_size=len(actions))
     optimizer = optim.Adam(policy_model.parameters(), lr=1e-3)

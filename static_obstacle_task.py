@@ -9,6 +9,10 @@ from habitat.tasks.nav.nav import NavigationTask
 from habitat_sim import NavMeshSettings
 
 
+def tmp():
+    pass
+
+
 def remove_all_objects(sim):
     for obj_id in sim.get_existing_object_ids():
         sim.remove_object(obj_id)
@@ -47,7 +51,7 @@ def init_objects(sim):
     )
 
     # Add a chair into the scene.
-    #obj_path = "objects/ycb/configs/002_master_chef_can"
+    # obj_path = "objects/ycb/configs/002_master_chef_can"
     obj_path = "replica_cad/configs/objects/frl_apartment_wall_cabinet_01"
     chair_template_id = obj_attr_mgr.load_object_configs(
         str(os.path.join('data/', obj_path))
@@ -67,9 +71,9 @@ def init_objects(sim):
 
     return object, goal
 
+
 @registry.register_task(name="StaticObstacleNav-v0")
 class NewNavigationTask(NavigationTask):
-
 
     def __init__(self, config, sim, dataset):
         logger.info("Creating a new type of task")
@@ -83,11 +87,10 @@ class NewNavigationTask(NavigationTask):
 
         sim.recompute_navmesh(sim.pathfinder, self.navmesh_settings, True)
 
-
     def _check_episode_is_active(self, *args, **kwargs):
-        logger.info(
-            "Current agent position: {}".format(self._sim.get_agent_state())
-        )
+        # logger.info(
+        #    "Current agent position: {}".format(self._sim.get_agent_state())
+        # )
         collision = self._sim.previous_step_collided
         stop_called = not getattr(self, "is_stop_called", False)
         return collision or stop_called
@@ -101,4 +104,4 @@ class NewNavigationTask(NavigationTask):
             is_last_action=True,
     ):
         super()._step_single_action(observations, action_name, action, episode, is_last_action=is_last_action)
-        print('here!')
+        # print('here!')

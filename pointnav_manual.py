@@ -1,7 +1,12 @@
 import cv2
 import habitat
 from habitat.sims.habitat_simulator.actions import HabitatSimActions
+
+import dynamic_obstacle_task
 import static_obstacle_task
+
+static_obstacle_task
+dynamic_obstacle_task
 
 FORWARD_KEY = "w"
 LEFT_KEY = "a"
@@ -15,7 +20,7 @@ def transform_rgb_bgr(image):
 
 def example():
     env = habitat.Env(
-        config=habitat.get_config("pointnav_static.yaml")
+        config=habitat.get_config("pointnav_dynamic.yaml")
     )
 
     print("Environment creation successful")
@@ -23,8 +28,8 @@ def example():
     print("Destination, distance: {:3f}, theta(radians): {:.2f}".format(
         observations["pointgoal_with_gps_compass"][0],
         observations["pointgoal_with_gps_compass"][1]))
-    #birdseye = env.sim.agents[0].get_state()['birdseye']
-    #birdseye = env.sim._prev_sim_obs['birdseye']
+    # birdseye = env.sim.agents[0].get_state()['birdseye']
+    # birdseye = env.sim._prev_sim_obs['birdseye']
     cv2.imshow("RGB", transform_rgb_bgr(observations['rgb']))
 
     print("Agent stepping around inside environment.")
@@ -47,11 +52,6 @@ def example():
             print("action: FINISH")
         else:
             print("INVALID KEY")
-            env.close()
-            env = habitat.Env(
-                config=habitat.get_config("pointnav.yaml")
-            )
-            env.reset()
             continue
 
         observations = env.step(action)
