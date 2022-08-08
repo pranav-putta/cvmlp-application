@@ -11,7 +11,7 @@ from habitat_sim import ShortestPath
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from argparser import argclass, parse_args
+from mltoolkit.argparser import argclass, parse_args
 
 
 @argclass

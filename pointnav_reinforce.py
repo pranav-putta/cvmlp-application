@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import dynamic_obstacle_task
 import static_obstacle_task
-from argparser import argclass, parse_args
+from mltoolkit.argparser import argclass, parse_args
 
 static_obstacle_task
 dynamic_obstacle_task

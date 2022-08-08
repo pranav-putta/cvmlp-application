@@ -11,7 +11,7 @@ from habitat_sim._ext.habitat_sim_bindings import ManagedRigidObject
 from habitat_sim.utils import viz_utils as vut
 from scipy.spatial.transform import Rotation
 
-from argparser import argclass, parse_args
+from mltoolkit.argparser import argclass, parse_args
 
 random.seed(0)
 

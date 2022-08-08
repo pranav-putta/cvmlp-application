@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 from torch import nn, optim
 from torch.utils.tensorboard import SummaryWriter
 
-from argparser import argclass, parse_args
+from mltoolkit.argparser import argclass, parse_args
 
 writer = SummaryWriter()
 

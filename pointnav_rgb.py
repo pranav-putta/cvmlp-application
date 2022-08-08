@@ -12,7 +12,7 @@ from torch import nn, optim
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
-from argparser import argclass, parse_args
+from mltoolkit.argparser import argclass, parse_args
 
 writer = SummaryWriter()
 

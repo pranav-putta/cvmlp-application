@@ -6,7 +6,7 @@ import habitat
 import torch.nn
 from torch import optim, nn
 
-from argparser import argclass, parse_args
+from mltoolkit.argparser import argclass, parse_args
 
 actions = ['MOVE_FORWARD', 'STOP', 'TURN_LEFT', 'TURN_RIGHT']
 device = 'cpu'

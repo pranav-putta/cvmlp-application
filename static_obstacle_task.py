@@ -9,10 +9,6 @@ from habitat.tasks.nav.nav import NavigationTask
 from habitat_sim import NavMeshSettings
 
 
-def tmp():
-    pass
-
-
 def remove_all_objects(sim):
     for obj_id in sim.get_existing_object_ids():
         sim.remove_object(obj_id)
