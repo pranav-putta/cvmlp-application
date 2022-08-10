@@ -5,17 +5,18 @@ from time import sleep
 
 import cv2
 import habitat
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
 from habitat_sim.logging import logger
+from mltoolkit.argparser import argclass, parse_args
 from torch import nn, optim
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
 import dynamic_obstacle_task
 import static_obstacle_task
-from mltoolkit.argparser import argclass, parse_args
 
 static_obstacle_task
 dynamic_obstacle_task
@@ -44,7 +45,7 @@ class PointNavArguments:
     num_episodes: int = field(default=10000)
     max_t: int = field(default=100)
     gamma: float = field(default=1.0)
-    config: str = field(default="pointnav.yaml")
+    config: str = field(default="pointnav_dynamic.yaml")
 
 
 Transition = namedtuple('Transition',
@@ -102,6 +103,10 @@ def reinforce(args: PointNavArguments, policy, optimizer, env: habitat.Env, n_ep
     scores = []
     success_scores = deque(maxlen=100)
     spl_scores = deque(maxlen=100)
+    rwd_scores = deque(maxlen=100)
+
+    avgs = {'success': [], 'spl': [], 'rewards': []}
+
     for e in range(1, n_episodes):
         lr_scheduler = optim.lr_scheduler.LambdaLR(
             optimizer=optimizer,
@@ -156,6 +161,11 @@ def reinforce(args: PointNavArguments, policy, optimizer, env: habitat.Env, n_ep
         metrics = env.get_metrics()
         success_scores.append(metrics['success'])
         spl_scores.append(metrics['spl'])
+        rwd_scores.append(sum(rewards))
+
+        avgs['success'].append(np.mean(success_scores).item())
+        avgs['spl'].append(np.mean(spl_scores).item())
+        avgs['rewards'].append(np.mean(rwd_scores).item())
 
         # Recalculate the total reward applying discounted factor
         discounts = [args.gamma ** i for i in range(len(rewards) + 1)]
@@ -181,6 +191,27 @@ def reinforce(args: PointNavArguments, policy, optimizer, env: habitat.Env, n_ep
             # print(dists)
             # print(moves)
 
+    xs = list(range(len(avgs['success'])))
+
+    plt.subplot(311)
+    plt.plot(xs, avgs['success'])
+    plt.xlabel('Step')
+    plt.ylabel('Ratio Successful')
+    plt.title('Success Rate')
+
+    plt.subplot(312)
+    plt.plot(xs, avgs['spl'])
+    plt.xlabel('Step')
+    plt.ylabel('SPL')
+    plt.title('SPL')
+
+    plt.subplot(313)
+    plt.plot(xs, avgs['rewards'])
+    plt.xlabel('Step')
+    plt.ylabel('Reward')
+    plt.title('Rewards')
+
+    plt.show()
     return scores
 
 
@@ -192,7 +223,7 @@ def eval_epoch(args: PointNavArguments, policy, env: habitat.Env):
     i = 0
     update_state(args, state, float(dist), float(heading), -1)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video = cv2.VideoWriter('video.mp4', fourcc, float(20), (256, 256), True)
+    video = cv2.VideoWriter(f'{args.config}_video.mp4', fourcc, float(20), (256, 256), True)
 
     while not env.episode_over and i < 100:
         video.write(transform_rgb_bgr(observation['rgb']))

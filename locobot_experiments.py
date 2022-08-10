@@ -294,7 +294,7 @@ def run_locobot_collision_sp(sim, locobot1, locobot2, args, dt_per_action=1):
         l2lin_f = move_to_point(sim, locobot2, l2points[i], args, dt=dt_per_action, step=1)
         for step in np.arange(0, 1 + 1 / 60, 1 / 60):
             # check for collision
-            if np.linalg.norm(locobot1.translation - locobot2.translation) <= 0.1:
+            if np.linalg.norm(locobot1.translation - locobot2.translation) <= 0.5:
                 print('Collision!')
                 return observations
             locobot1.velocity_control.linear_velocity = l1lin_f(step)
@@ -417,6 +417,7 @@ def main():
     rigid_obj_mgr = sim.get_rigid_object_manager()
 
     locobot = load_locobot(sim, obj_templates_mgr, rigid_obj_mgr, args, None)
+    locobot.motion_type = habitat_sim.physics.MotionType.KINEMATIC
     locobot2 = load_locobot(sim, obj_templates_mgr, rigid_obj_mgr, args, None)
 
     observations = run_locobot_collision_sp(sim, locobot, locobot2, args)
@@ -433,7 +434,7 @@ def main():
             observations,
             "birdseye",
             "color",
-            args.output_path + "robot_control",
+            args.output_path + "collision",
             open_vid=args.show_video,
         )
 

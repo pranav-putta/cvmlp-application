@@ -8,11 +8,10 @@ from habitat.core.registry import registry
 from habitat.tasks.nav.nav import NavigationTask
 from habitat_sim import NavMeshSettings, ShortestPath
 
+
 def remove_all_objects(sim):
     for obj_id in sim.get_existing_object_ids():
         sim.remove_object(obj_id)
-
-
 
 
 def set_object_in_front_of_agent(sim, obj, z_offset=-1.5, x_offset=1.):
@@ -139,25 +138,40 @@ class NewNavigationTask(NavigationTask):
     def random_points(self, sim, n):
         points = []
         for i in range(n):
-            points.append(sim.pathfinder.get_random_navigable_point())
+            point=(sim.pathfinder.get_random_navigable_point())
+            point[1] = 0.17669876
+            points.append(point)
         return points
+
+    def dist(self, u, v):
+        diff = np.array(u) - np.array(v)
+        return np.linalg.norm(diff)
 
     def __init__(self, config, sim, dataset):
         logger.info("Creating a new type of task Version: 2")
         super().__init__(config=config, sim=sim, dataset=dataset)
-        self.start_points = self.random_points(sim, 2)
-        self.end_points = self.random_points(sim, 2)
-        self.start_points = [[3.76204, 0.17669876, 0.72620916], [2.2625003, 0.17669876, 0.23297535]]
+        self.start_points = None
+
+
+        self.start_points = [[3.76204, 0.17669876, 1.72620916], [2.2625003, 0.17669876, 0.23297535]]
         self.end_points = [[1.6716383, 0.17669876, 0.7140454], [4.0453434, 0.17669876, 1.03202792]]
-        self.objects = init_objects(sim, self.start_points)
         self.current_trajec = []
         self.shortest_paths = []
 
-        for start, end in zip(self.start_points, self.end_points):
-            sp = get_shortest_path(sim, start, end)
-            self.shortest_paths.append(sp)
-            self.current_trajec.append((0, 1, 1))  # point 0, step 0, direction forward
+        while not self.shortest_paths:
+            self.start_points = self.random_points(sim, 2)
+            self.end_points = self.random_points(sim, 2)
+            if self.dist(self.start_points[0], self.start_points[1]) <= 2.25:
+                continue
+            for start, end in zip(self.start_points, self.end_points):
+                sp = get_shortest_path(sim, start, end)
+                if not sp:
+                    self.shortest_paths = []
+                    break
+                self.shortest_paths.append(sp)
+                self.current_trajec.append((0, 1, 1))  # point 0, step 0, direction forward
 
+        self.objects = init_objects(sim, self.start_points)
         self.navmesh_settings = NavMeshSettings()
         self.navmesh_settings.set_defaults()
         self.navmesh_settings.agent_radius = sim.agents[0].agent_config.radius

@@ -1,6 +1,8 @@
+import copy
 import math
 import pickle
 import random
+from collections import deque
 from dataclasses import field
 
 import cv2
@@ -9,9 +11,8 @@ import numpy as np
 import torch
 from habitat_sim import ShortestPath
 from matplotlib import pyplot as plt
-from tqdm import tqdm
-
 from mltoolkit.argparser import argclass, parse_args
+from tqdm import tqdm
 
 
 @argclass
@@ -32,15 +33,21 @@ class AgentArguments:
 class Arguments:
     config_file: str = field(default='./trajectory_config.yaml')
     scene: str = field(default='./data/scene_datasets/habitat-test-scenes/skokloster-castle.glb')
-    num_samples: int = field(default=10000)  # number of samples to generate
+    num_samples: int = field(default=1000)  # number of samples to generate
     num_points_per_curve: int = field(default=10)  # number of points in interpolation for curved path
-    ratio_curved: float = field(default=0)  # what ratio of trajectories should be curved
-    agent_end_max_dist: float = field(default=0.5)  # maximum distance between agents at the end of the path
+    ratio_curved: float = field(default=0.5)  # what ratio of trajectories should be curved
+    agent_end_max_dist: float = field(default=1.)  # maximum distance between agents at the end of the path
     min_path_dist: float = field(default=5.)  # the minimum distance of the path for each trajectory
     min_curvature_ratio: float = field(default=1.2)  # defined by straight-line to geodesic distance
-    save_loc: str = field(default='./trajectory_straight.pkl')  # data save location
-    bigfoot: AgentArguments
-    littlefoot: AgentArguments
+    save_loc: str = field(default='./eval_trajectory_hard.pkl')  # data save location
+    bigfoot: AgentArguments = field(default=AgentArguments(stride_length=3,
+                                                           turn_inc=30,
+                                                           goal_threshold=1.55))
+    littlefoot: AgentArguments = field(default=AgentArguments(stride_length=1.25,
+                                                              turn_inc=20,
+                                                              goal_threshold=0.675))
+    add_noise: bool = field(default=False)
+    action_space_mismatch: bool = field(default=True)
 
 
 def show_observation(observations, key='color_sensor'):
@@ -78,6 +85,12 @@ def make_cfg(args: Arguments):
     littlefoot_agent.action_space['move_forward'].actuation.amount = args.littlefoot.stride_length
     littlefoot_agent.action_space['turn_left'].actuation.amount = args.littlefoot.turn_inc
     littlefoot_agent.action_space['turn_right'].actuation.amount = args.littlefoot.turn_inc
+
+    if args.action_space_mismatch:
+        bigfoot_agent.action_space['move_left'] = copy.deepcopy(bigfoot_agent.action_space['move_forward'])
+        bigfoot_agent.action_space['move_right'] = copy.deepcopy(bigfoot_agent.action_space['move_forward'])
+        bigfoot_agent.action_space['move_left'].name = 'move_left'
+        bigfoot_agent.action_space['move_right'].name = 'move_right'
 
     # In the 1st example, we attach only one sensor,
     # a RGB visual sensor, to the agent
@@ -194,7 +207,7 @@ def add_curvature_to_path(args: Arguments, sim: habitat_sim.Simulator, path):
 
         a = (py - px) / (px ** 2 - px)
         b = 1 - a
-        if approx_arc_length(a, b) < args.min_curvature_ratio:
+        if approx_arc_length(a, b) < args.min_curvature_ratio * math.sqrt(2):
             # if arc length is too small, reject this (start, goal) pair and move on
             return None
 
@@ -220,7 +233,13 @@ def add_curvature_to_path(args: Arguments, sim: habitat_sim.Simulator, path):
             # rip make curve smaller
             points = None
             continue
+        else:
+            break
     return points
+
+
+def generate_noise(dim=3, max=0.1):
+    return np.random.random((dim,)) * max
 
 
 def generate_path(args: Arguments, sim: habitat_sim.Simulator, curved=False):
@@ -265,7 +284,8 @@ def dist(u, v):
     return math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
 
 
-def follow_path(sim: habitat_sim.Simulator, agent_id, path, goal_threshold=0.1, step_by_key=False):
+def follow_path(sim: habitat_sim.Simulator, agent_id, path, goal_threshold=0.1, step_by_key=False, add_noise=False,
+                actions_mismatch=False):
     """
     makes agent follow desired path by using the GreedyGeodesicFollower
     :param sim: habitat simulator
@@ -296,6 +316,7 @@ def follow_path(sim: habitat_sim.Simulator, agent_id, path, goal_threshold=0.1, 
     follower = sim.make_greedy_follower(agent_id, goal_threshold, forward_key='move_forward',
                                         left_key='turn_left', right_key='turn_right')
     observations = []
+    history = deque(maxlen=3)
     for point in path[1:]:
         try:
             action = follower.next_action_along(point)
@@ -312,9 +333,31 @@ def follow_path(sim: habitat_sim.Simulator, agent_id, path, goal_threshold=0.1, 
                 plt.show()
                 print(f"greedy follower took too long, agent: {agent_id}")
                 return None
+            if action == 'move_forward' and history == deque(['turn_left'] * 3) and agent_id == 0 and actions_mismatch:
+                for j in range(3):
+                    agent.act('turn_right')
+                    observations.pop()
+                action = 'move_left'
+                history.clear()
+            elif action == 'move_forward' and history == deque(
+                    ['turn_right'] * 3) and agent_id == 0 and actions_mismatch:
+                for j in range(3):
+                    agent.act('turn_left')
+                    observations.pop()
+                action = 'move_right'
+                history.clear()
             agent.act(action)
+            history.append(action)
             obs = sim.get_sensor_observations(agent_id)
-            observations.append((agent.get_state().position, agent.get_state().rotation))
+            pos = agent.get_state().position
+            rot = agent.get_state().rotation
+
+            if add_noise:
+                rand_point = generate_noise(3, max=0.25)
+                rand_rotation = quaternion_from_euler(generate_noise(3, max=0.1))
+                pos += rand_point
+                rot *= rand_rotation
+            observations.append((pos, rot))
             if step_by_key:
                 show_observation(obs)
                 cv2.waitKey(0)
@@ -351,8 +394,10 @@ def generate_paired_trajectory(args: Arguments, sim: habitat_sim.Simulator, bigf
             end distance is found, otherwise returns None
     """
     path = generate_path(args, sim, curved)
-    bigfoot_obs = follow_path(sim, bigfoot_id, path, args.bigfoot.goal_threshold, step_by_key=step_by_key)
-    littlefoot_obs = follow_path(sim, littlefoot_id, path, args.littlefoot.goal_threshold, step_by_key=step_by_key)
+    bigfoot_obs = follow_path(sim, bigfoot_id, path, args.bigfoot.goal_threshold, step_by_key=step_by_key,
+                              add_noise=args.add_noise, actions_mismatch=args.action_space_mismatch)
+    littlefoot_obs = follow_path(sim, littlefoot_id, path, args.littlefoot.goal_threshold, step_by_key=step_by_key,
+                                 add_noise=args.add_noise, actions_mismatch=args.action_space_mismatch)
     if bigfoot_obs and littlefoot_obs:
         bpos = sim.get_agent(bigfoot_id).get_state().position
         lpos = sim.get_agent(littlefoot_id).get_state().position
@@ -392,14 +437,6 @@ def manual(sim: habitat_sim.Simulator):
 
 def main():
     args: Arguments = parse_args(Arguments, resolve_config=False)
-
-    args.bigfoot.stride_length = 3
-    args.bigfoot.turn_inc = 30
-    args.bigfoot.goal_threshold = args.bigfoot.stride_length / 2 + 0.05
-
-    args.littlefoot.stride_length = 1.25
-    args.littlefoot.turn_inc = 20
-    args.littlefoot.goal_threshold = args.littlefoot.stride_length / 2 + 0.05
 
     cfg = make_cfg(args)
     sim = habitat_sim.Simulator(cfg)
